@@ -9,6 +9,7 @@ from tqdm import tqdm
 from discor.replay_buffer import ReplayBuffer, EnsembleBuffer
 from discor.utils import RunningMeanStats
 from AssettoCorsaEnv.data_loader import DataLoader
+from curriculum import CurriculumScheduler, Stage
 
 import logging
 
@@ -40,6 +41,7 @@ class Agent:
         offline_buffer_size=1_000_000,
         wandb_logger=None,
         save_final_buffer=False,
+        resume_stage_idx=False,
     ):
 
         # Environment.
@@ -114,6 +116,43 @@ class Agent:
         logger.info(f"gamma: {self._algo.gamma}")
         logger.info(f"nstep: {self._algo.nstep}")
         logger.info(f"memory_size: {memory_size}")
+
+        self.curriculum = CurriculumScheduler(
+            stages=[
+                Stage("time_trial", opponents=0, reset_mode="local"),
+                Stage("one_ai_slow", opponents=1, ai_level=70, reset_mode="local"),
+                Stage(
+                    "one_ai_full",
+                    opponents=1,
+                    ai_level=100,
+                    reset_mode="grid_restart",
+                    entry_thresholds={"off_track_rate": 0.05, "dnf_rate": 0.05},
+                ),
+                Stage(
+                    "small_grid", opponents=4, ai_level=100, reset_mode="grid_restart"
+                ),
+            ],
+            window=20,
+            min_episodes_per_stage=15,
+            advance_thresholds={
+                "dnf_rate": 0.2,
+                "collision_rate": 0.3,
+                "lap_time_ratio": 1.15,
+            },
+            regress_thresholds={
+                "dnf_rate": 0.6,
+                "collision_rate": 1.0,
+            },
+        )
+
+        # If this run is resuming after a manual relaunch, seed the scheduler to
+        # that stage BEFORE the training loop starts.
+        if resume_stage_idx is not None:
+            self.curriculum.set_stage(resume_stage_idx)
+            stage = self.curriculum.current_stage
+            self._env.apply_stage_reset_mode(stage)  # see Step 4 below
+            if resume_stage_idx > 0:
+                self._algo.set_anchor(coef_init=1.0, decay_steps=50_000)
 
     def save(self, path, save_buffer=True):
         self._algo.save_models(path)
@@ -300,6 +339,33 @@ class Agent:
         logger.info(
             f"Episode done. Took {ep_time:.2f}s.  Steps per episode: {episode_steps}. Buffer size: {len(self._replay_buffer)} fps: {episode_steps / ep_time:.2f}"
         )
+        metrics = {
+            "lap_time": env_ep_stats.get("BestLap")
+            if not env_ep_stats.get("dnf", False)
+            else None,
+            "dnf": bool(env_ep_stats.get("dnf", False)),
+            "collisions": env_ep_stats.get("num_collisions", 0),
+        }
+        self.curriculum.record_episode(metrics)
+        new_stage_idx, changed, direction = self.curriculum.step()
+
+        if changed:
+            stage = self.curriculum.current_stage
+            checkpoint_path = os.path.join(
+                self._model_dir, f"curriculum_stage_{self.curriculum.stage_idx}"
+            )
+            logger.info(
+                f"Curriculum {direction} -> stage {new_stage_idx} ({stage.name}). "
+                f"Saving checkpoint and stopping. Relaunch AC with "
+                f"opponents={stage.opponents}, ai_level={stage.ai_level}, then resume with:\n"
+                f"  python train.py --algo anchored_discor --load_path {checkpoint_path} "
+                f"--curriculum_stage {new_stage_idx}"
+            )
+            self._writer.add_scalar("curriculum/stage_idx", new_stage_idx, self._steps)
+            self.save(
+                checkpoint_path, save_buffer=False
+            )  # same call used for best_lap_time/best_reward above
+            raise SystemExit(0)
 
     def evaluate(self):
         try:

@@ -448,6 +448,19 @@ class AssettoCorsaEnv(Env, gym_utils.EzPickle):
     def set_reset_state(self, send_reset_at_start):
         self.send_reset_at_start = send_reset_at_start
 
+    def apply_stage_reset_mode(self, stage):
+        """Call once at process startup after a manual relaunch into `stage`'s
+        session config. Does not touch AC itself -- only Python-side reset
+        behavior for this process."""
+        if stage.reset_mode == "local":
+            self.recover_car_on_done = True  # AC recovers near failure point
+            self.set_reset_state(send_reset_at_start=False)
+        elif stage.reset_mode == "grid_restart":
+            self.recover_car_on_done = False  # don't auto-recover mid-episode;
+            # let the episode end and reset
+            # to the grid instead
+            self.set_reset_state(send_reset_at_start=True)
+
     def update_racing_line(self, x, y):
         # use a cropped version of the racing line => update the gpu as well
         self.racing_line = self.ref_lap.get_racing_line_time()

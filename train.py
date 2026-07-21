@@ -39,6 +39,12 @@ def parse_args(hardcode=None):
         "--algo", type=str, default="sac", help="Algorithm type (default: sac)"
     )
     parser.add_argument("--test", action="store_true")
+    parser.add_argument(  # <-- new
+        "--curriculum_stage",
+        type=int,
+        default=None,
+        help="Stage index to resume into after a manual AC relaunch. Omit for a fresh run starting at stage 0.",
+    )
     parser.add_argument(
         "overrides",
         nargs=argparse.REMAINDER,
@@ -147,6 +153,7 @@ def main():
         seed=config.seed,
         **config.Agent,
         wandb_logger=wandb_logger,
+        resume_stage_idx=args.curriculum_stage,
     )
 
     if not args.test and config.load_offline_data:

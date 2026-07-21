@@ -74,6 +74,22 @@ class CurriculumScheduler:
     def current_stage(self) -> Stage:
         return self.stages[self.stage_idx]
 
+    def set_stage(self, stage_idx: int, clear_history: bool = True):
+        """
+        Seed the scheduler to a specific stage. Call this ONCE, right after
+        process startup, when resuming training following a manual AC
+        relaunch into that stage's session config. Does not touch AC or
+        any env object -- purely internal bookkeeping so the rolling
+        metrics/thresholds start fresh for the new stage rather than being
+        contaminated by episodes recorded at the old difficulty.
+        """
+        assert 0 <= stage_idx < len(self.stages)
+        self.stage_idx = stage_idx
+        self.episodes_in_stage = 0
+        if clear_history:
+            self.history = []
+            self.stage_best_lap = {}
+
     def record_episode(self, metrics: dict):
         """
         metrics expected keys:
@@ -122,6 +138,18 @@ class CurriculumScheduler:
         """
         Call once per episode, after record_episode(). Returns:
             (stage_idx, changed: bool, direction: Optional['advance'|'regress'])
+
+        IMPORTANT: if `changed` is True, do NOT try to reconfigure the env
+        live. Assetto Corsa can't switch opponent count/session type mid-run.
+        The caller (your training loop) should instead:
+          1. Save a checkpoint.
+          2. Log/print the target stage name and its expected AC session
+             config (opponents, ai_level, reset_mode) so you know what to
+             relaunch AC into.
+          3. Stop the training loop cleanly.
+        Then, after manually relaunching AC in that stage's session config,
+        resume training with the checkpoint and call set_stage(stage_idx)
+        once at startup before the training loop begins.
         """
         total_episodes = len(self.history)
 

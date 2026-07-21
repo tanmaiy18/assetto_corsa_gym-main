@@ -47,6 +47,23 @@ DisCor:
   error_hidden_units: [256, 256, 256, 256]
   tau_init: 10.0
 
+Curriculum:
+  mode: adaptive   # none | fixed | adaptive
+  window: 20
+  min_episodes_per_stage: 15
+  advance_thresholds:
+    dnf_rate: 0.2
+    collision_rate: 0.3
+    lap_time_ratio: 1.15
+  regress_thresholds:
+    dnf_rate: 0.6
+    collision_rate: 1.0
+  fixed_stage_episodes: 30   # only used when mode: fixed
+
+Anchoring:
+  anchor_coef_init: 1.0
+  anchor_decay_steps: 50_000
+
 AssettoCorsa:
   ego_sampling_freq: 25     # in Hz
   max_episode_py_time: 300. # in seconds

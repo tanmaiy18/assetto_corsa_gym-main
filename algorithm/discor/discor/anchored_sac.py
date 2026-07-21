@@ -36,8 +36,9 @@ from discor.utils import disable_gradients
 
 
 class AnchoredDisCor(DisCor):
-
-    def __init__(self, *args, anchor_coef_init=1.0, anchor_decay_steps=50_000, **kwargs):
+    def __init__(
+        self, *args, anchor_coef_init=1.0, anchor_decay_steps=50_000, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self._anchor_policy_net = None
         self._anchor_coef_init = anchor_coef_init
@@ -109,8 +110,12 @@ class AnchoredDisCor(DisCor):
     def update_policy_and_entropy(self, batch, writer):
         stats = super().update_policy_and_entropy(batch, writer)
         if self._learning_steps % self._log_interval == 0:
-            writer.add_scalar("curriculum/anchor_coef", self._last_anchor_coef, self._learning_steps)
-            writer.add_scalar("curriculum/anchor_loss", self._last_anchor_loss, self._learning_steps)
+            writer.add_scalar(
+                "curriculum/anchor_coef", self._last_anchor_coef, self._learning_steps
+            )
+            writer.add_scalar(
+                "curriculum/anchor_loss", self._last_anchor_loss, self._learning_steps
+            )
             if stats is not None:
                 stats["anchor_coef"] = self._last_anchor_coef
                 stats["anchor_loss"] = self._last_anchor_loss
