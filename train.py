@@ -153,7 +153,6 @@ def main():
         seed=config.seed,
         **config.Agent,
         wandb_logger=wandb_logger,
-        resume_stage_idx=args.curriculum_stage,
     )
 
     if not args.test and config.load_offline_data:

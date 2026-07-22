@@ -126,7 +126,7 @@ class Agent:
                     opponents=1,
                     ai_level=100,
                     reset_mode="grid_restart",
-                    entry_thresholds={"off_track_rate": 0.05, "dnf_rate": 0.05},
+                    # entry_thresholds={"off_track_rate": 0.05, "dnf_rate": 0.05},
                 ),
                 Stage(
                     "small_grid", opponents=4, ai_level=100, reset_mode="grid_restart"
